@@ -1,0 +1,151 @@
+package disease;
+import model.Patient;
+import model.PatientDisease;
+import java.time.LocalDate;
+import java.util.*;
+import java.time.Period;
+
+declare isGerd
+id:int @key
+end
+
+declare isActive
+status: String @key
+end
+
+declare isWithinTimeframe
+id: int @key
+end
+
+rule "Timeframe"
+    when
+     $d:LocalDate()
+     $patient : Patient(timeframe.isAfter($d.minusMonths(6)))
+   then
+        insertLogical(new isWithinTimeframe($patient.getId()));
+end
+
+rule "Active"
+when
+    $patient: Patient(status=="Active")
+then
+    insertLogical(new isActive($patient.getStatus()));
+end
+
+
+
+rule "Dysphagia"
+when
+    $patient: Patient(ICD10=="R13.1" || ICD10=="R13.19"||ICD10=="R13.12"||ICD10=="R13.13"||ICD10=="R13.14")
+    $isactive: isActive(status==$patient.getStatus())
+    $timeframe: isWithinTimeframe(id==$patient.getId())
+    $patientdisease: PatientDisease()
+then
+    $patient.setPreFill("Y");
+    $patientdisease.addPatient($patient,"Dysphagia");
+end
+
+rule "Weight Loss"
+when
+    $patient: Patient(ICD10=="R63.4" || ICD10=="E64.0"||ICD10=="E46"||ICD10=="E44.0"||ICD10=="E44.1"|| ICD10=="E45")
+    $isactive: isActive(status==$patient.getStatus())
+    $timeframe: isWithinTimeframe(id==$patient.getId())
+    $patientdisease: PatientDisease()
+then
+    $patient.setPreFill("Y");
+    $patientdisease.addPatient($patient,"Weight Loss");
+end
+
+rule "GERD"
+when
+    $patient: Patient(ICD10=="K21.0" || ICD10=="K21.9")
+    $isactive: isActive(status==$patient.getStatus())
+    $timeframe: isWithinTimeframe(id==$patient.getId())
+    $patientdisease: PatientDisease()
+then
+    $patientdisease.addPatient($patient,"GERD");
+    $patient.setPreFill("Y");
+    insertLogical(new isGerd($patient.getId()));
+end
+
+
+
+rule "checkmultiple"
+
+    when
+        $patientdisease: PatientDisease()
+        $patient: Patient($patientdisease.checkMultiple($patient))
+    then
+        $patient.setMultiple("Y");
+end
+
+
+rule "Hiatal Hernia"
+when
+    $patient: Patient(ICD10=="K40" || ICD10=="K41" )
+    $patientdisease: PatientDisease()
+    $isactive: isActive(status==$patient.getStatus())
+    $timeframe: isWithinTimeframe()
+    $gerd:isGerd(id==$patient.getId())
+then
+    $patient.addRisk("Hiatal Hernia");
+    $patient.setPreFill("Y");
+    $patientdisease.addPatientwithRisk($patient);
+end
+
+rule "Elevated BMI"
+when
+    $patient: Patient(ICD10=="E66.9" || ICD10=="E66")
+    $isactive: isActive(status==$patient.getStatus())
+    $timeframe: isWithinTimeframe()
+    $patientdisease: PatientDisease()
+    $gerd:isGerd(id==$patient.getId())
+then
+    $patient.addRisk("Elevated BMI");
+    $patient.setPreFill("Y");
+    $patientdisease.addPatientwithRisk($patient);
+end
+
+rule "Tobacco Usage"
+when
+    $patient: Patient(ICD10=="Z72.0" || ICD10=="F17.220" && smokingStatus =="Positive" && status=="Active")
+    $isactive: isActive(status==$patient.getStatus())
+    $patientdisease: PatientDisease()
+    $gerd:isGerd(id==$patient.getId())
+then
+    $patient.addRisk("Tobacco Usage");
+    $patientdisease.addPatientwithRisk($patient);
+end
+
+rule "Age"
+when
+
+    $d:LocalDate()
+    $patient: Patient(Period.between($patient.dob, $d).getYears()>50 && status=="Active")
+    $patientdisease: PatientDisease()
+    $gerd:isGerd(id==$patient.getId())
+then
+    $patient.addRisk("Age more than 50");
+    $patientdisease.addPatientwithRisk($patient);
+end
+
+rule "White Male"
+when
+    $patient: Patient(gender== "Male" && race=="White" && status=="Active")
+    $patientdisease: PatientDisease()
+    $gerd:isGerd(id==$patient.getId())
+then
+    $patient.addRisk("White Male");
+    $patientdisease.addPatientwithRisk($patient);
+end
+
+rule "Check multiple risk"
+when
+    $patient: Patient()
+    $gerd: isGerd(id==$patient.getId())
+    $patientdisease: PatientDisease(this.checkMultipleRisk($patient))
+then
+    $patient.setMultipleG("Y");
+    $patientdisease.addPatientwithMultipleG($patient);
+end
+

@@ -1,0 +1,29 @@
+package backwardchaining;
+
+import model.Location;
+
+query isContainedIn( String x, String y ) 
+    Location( x, y; )
+    or 
+    ( Location( z, y; ) and isContainedIn( x, z; ) )  // recursion call
+end
+
+
+rule "go" salience 10
+
+  when
+    $s : String( )
+  then
+    System.out.println( $s );
+end
+
+
+rule "go1"
+
+  when
+    String( this == "go1" )
+    isContainedIn("key", "envelop"; )
+  then
+    System.out.println( "key is in the envelop" );
+end
+
